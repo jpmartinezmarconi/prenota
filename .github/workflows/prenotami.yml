@@ -1,0 +1,29 @@
+name: Check Prenot@mi appointments
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-appointment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt
+      - name: Check appointment availability
+        env:
+          PRENOTAMI_EMAIL: ${{ secrets.PRENOTAMI_EMAIL }}
+          PRENOTAMI_PASSWORD: ${{ secrets.PRENOTAMI_PASSWORD }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+          BOOKING_URL: ${{ secrets.BOOKING_URL }}
+          SERVICE_NAME: renovación de pasaporte
+        run: python bot.py --once
