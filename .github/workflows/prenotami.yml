@@ -5,10 +5,14 @@ on:
     - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
-      test_telegram:
-        description: "Enviar un mensaje de prueba a Telegram"
-        required: false
-        type: boolean
+      mode:
+        description: "Qué quieres ejecutar"
+        required: true
+        default: test
+        type: choice
+        options:
+          - test
+          - check
 
 permissions:
   contents: read
@@ -32,8 +36,13 @@ jobs:
           BOOKING_URL: ${{ secrets.BOOKING_URL }}
           SERVICE_NAME: renovación de pasaporte
         run: |
-          if [ "${{ inputs.test_telegram }}" = "true" ]; then
+          if [ "${{ inputs.mode }}" = "test" ]; then
+            test -n "$TELEGRAM_TOKEN" || { echo "Falta el Secret TELEGRAM_TOKEN"; exit 1; }
+            test -n "$CHAT_ID" || { echo "Falta el Secret CHAT_ID"; exit 1; }
             python bot.py --test-telegram
           else
+            test -n "$PRENOTAMI_EMAIL" || { echo "Falta el Secret PRENOTAMI_EMAIL"; exit 1; }
+            test -n "$PRENOTAMI_PASSWORD" || { echo "Falta el Secret PRENOTAMI_PASSWORD"; exit 1; }
+            test -n "$BOOKING_URL" || { echo "Falta el Secret BOOKING_URL"; exit 1; }
             python bot.py --once
           fi
