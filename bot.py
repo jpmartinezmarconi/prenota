@@ -81,4 +81,7 @@ def main(run_once=False):
 
 
 if __name__ == "__main__":
-	main(run_once="--once" in sys.argv)
+	if "--test-telegram" in sys.argv:
+		send_telegram_message("Prueba correcta: el bot de Prenot@mi puede enviarte mensajes.")
+	else:
+		main(run_once="--once" in sys.argv)

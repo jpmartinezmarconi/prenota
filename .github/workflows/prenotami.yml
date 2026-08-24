@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
+    inputs:
+      test_telegram:
+        description: "Enviar un mensaje de prueba a Telegram"
+        required: false
+        type: boolean
 
 permissions:
   contents: read
@@ -26,4 +31,9 @@ jobs:
           CHAT_ID: ${{ secrets.CHAT_ID }}
           BOOKING_URL: ${{ secrets.BOOKING_URL }}
           SERVICE_NAME: renovación de pasaporte
-        run: python bot.py --once
+        run: |
+          if [ "${{ inputs.test_telegram }}" = "true" ]; then
+            python bot.py --test-telegram
+          else
+            python bot.py --once
+          fi
