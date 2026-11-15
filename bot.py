@@ -4,12 +4,25 @@ import sys
 import time
 
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 LOGIN_URL = "https://prenotami.esteri.it/Home/Login"
 CHECK_INTERVAL_SECONDS = int(os.getenv("CHECK_INTERVAL_SECONDS", "60"))
 NO_APPOINTMENT_TEXT = os.getenv("NO_APPOINTMENT_TEXT", "No hay citas disponibles")
 SERVICE_NAME = os.getenv("SERVICE_NAME", "renovación de pasaporte")
+
+HEADERS = {
+	"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+	"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+	"Accept-Language": "es-ES,es;q=0.9",
+	"Accept-Encoding": "gzip, deflate",
+	"DNT": "1",
+	"Connection": "keep-alive",
+	"Upgrade-Insecure-Requests": "1",
+}
 
 
 def required_setting(name):
@@ -48,6 +61,7 @@ def check_booking():
 	booking_url = required_setting("BOOKING_URL")
 
 	with requests.Session() as session:
+		session.headers.update(HEADERS)
 		logging.info(f"Iniciando sesión con email: {email}")
 		response = session.post(
 			LOGIN_URL,
@@ -97,14 +111,19 @@ def main(run_once=False):
 	logging.info(f"Servicio a monitorear: {SERVICE_NAME}")
 	
 	iteration = 0
+	cita_enviada = False
 	while True:
 		iteration += 1
 		try:
 			logging.info(f"\n--- Iteración #{iteration} ---")
 			if check_booking():
-				logging.info("✅ Cita encontrada y notificación enviada. Finalizando.")
-				return
-			logging.info(f"⏳ No hay citas disponibles. Próxima revisión en {CHECK_INTERVAL_SECONDS} segundos")
+				if not cita_enviada:
+					logging.info("✅ Cita encontrada y notificación enviada.")
+					cita_enviada = True
+				logging.info(f"⏳ Continuando monitoreo. Próxima revisión en {CHECK_INTERVAL_SECONDS} segundos")
+			else:
+				cita_enviada = False
+				logging.info(f"⏳ No hay citas disponibles. Próxima revisión en {CHECK_INTERVAL_SECONDS} segundos")
 		except Exception as e:
 			logging.exception(f"❌ Error durante la revisión: {type(e).__name__}: {e}")
 		
