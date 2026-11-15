@@ -48,8 +48,13 @@ def booking_available(session, booking_url):
 	response.raise_for_status()
 	
 	# Verificar si hay citas disponibles
-	available = NO_APPOINTMENT_TEXT not in response.text
-	logging.debug(f"Respuesta de booking: {response.status_code}, disponible: {available}")
+	# Busca el texto que CONFIRMA que NO hay citas
+	no_appointment_found = NO_APPOINTMENT_TEXT.lower() in response.text.lower()
+	available = not no_appointment_found
+	
+	logging.info(f"Respuesta de booking: {response.status_code}")
+	logging.info(f"¿'No hay citas disponibles' encontrado en página?: {no_appointment_found}")
+	logging.info(f"¿Citas disponibles?: {available}")
 	logging.debug(f"Contenido de la página (primeros 500 chars): {response.text[:500]}")
 	
 	return available
@@ -78,10 +83,10 @@ def check_booking():
 		if booking_available(session, booking_url):
 			message = f"✅ CITA DISPONIBLE\n\nHay cita disponible para {SERVICE_NAME} en Prenot@mi.\nRevisa inmediatamente: {booking_url}"
 			send_telegram_message(message)
-			logging.info("Notificación de cita enviada por Telegram")
+			logging.warning("⚠️ NOTIFICACIÓN DE CITA ENVIADA POR TELEGRAM")
 			return True
 		else:
-			logging.debug("No hay citas disponibles en este momento")
+			logging.info("✅ Verificación completada: No hay citas disponibles en este momento")
 	return False
 
 
