@@ -5,6 +5,13 @@ import time
 
 import requests
 from dotenv import load_dotenv
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
 load_dotenv()
 
@@ -47,6 +54,12 @@ def booking_available(session, booking_url):
 	response = session.get(booking_url, timeout=30)
 	response.raise_for_status()
 	
+	# Verificar si hay un CAPTCHA (Radware Bot Manager)
+	if "Radware" in response.text or "hcaptcha" in response.text or "captcha" in response.text.lower():
+		logging.error("❌ CAPTCHA detectado - El sitio está bloqueando bots automáticos")
+		logging.error("Necesitarás usar Selenium o resolver manualmente el CAPTCHA")
+		return False
+	
 	# Verificar si hay citas disponibles
 	# Busca el texto que CONFIRMA que NO hay citas
 	no_appointment_found = NO_APPOINTMENT_TEXT.lower() in response.text.lower()
@@ -60,34 +73,101 @@ def booking_available(session, booking_url):
 	return available
 
 
+
 def check_booking():
 	email = required_setting("PRENOTAMI_EMAIL")
 	password = required_setting("PRENOTAMI_PASSWORD")
 	booking_url = required_setting("BOOKING_URL")
 
-	with requests.Session() as session:
-		session.headers.update(HEADERS)
-		logging.info(f"Iniciando sesión con email: {email}")
-		response = session.post(
-			LOGIN_URL,
-			data={"Email": email, "Password": password},
-			timeout=30,
+	try:
+		# Configurar opciones de Chrome sin interfaz gráfica
+		chrome_options = ChromeOptions()
+		chrome_options.add_argument("--no-sandbox")
+		chrome_options.add_argument("--disable-dev-shm-usage")
+		chrome_options.add_argument("--disable-gpu")
+		chrome_options.add_argument("--headless")
+		chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+		
+		driver = webdriver.Chrome(
+			service=Service(ChromeDriverManager().install()),
+			options=chrome_options
 		)
-		response.raise_for_status()
 		
-		# Verificar que el login fue exitoso
-		if "error" in response.text.lower() or response.status_code != 200:
-			logging.warning(f"Posible error en login: {response.status_code}")
+		try:
+			logging.info("Abriendo Prenota con navegador...")
+			driver.get("https://prenotami.esteri.it/Home/Login")
+			
+			# Esperar a que se cargue el formulario de login
+			wait = WebDriverWait(driver, 10)
+			email_field = wait.until(EC.presence_of_element_located((By.NAME, "Email")))
+			
+			logging.info(f"Iniciando sesión con email: {email}")
+			email_field.send_keys(email)
+			
+			password_field = driver.find_element(By.NAME, "Password")
+			password_field.send_keys(password)
+			
+			# Buscar y hacer click en el botón de login
+			login_button = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
+			login_button.click()
+			
+			# Esperar a que se cargue la página después del login
+			time.sleep(3)
+			
+			logging.info("Login completado, navegando a citas...")
+			driver.get(booking_url)
+			time.sleep(2)
+			
+			# Verificar disponibilidad
+			page_text = driver.page_source.lower()
+			no_appointment_found = NO_APPOINTMENT_TEXT.lower() in page_text
+			available = not no_appointment_found
+			
+			logging.info(f"¿'No hay citas disponibles' en página?: {no_appointment_found}")
+			logging.info(f"¿Citas disponibles?: {available}")
+			
+			if available:
+				logging.warning("✅ CITA DISPONIBLE DETECTADA")
+				return True
+			else:
+				logging.info("✅ No hay citas disponibles en este momento")
+				return False
+				
+		finally:
+			driver.quit()
+			
+	except Exception as e:
+		logging.error(f"Error con Selenium: {e}")
+		logging.info("Intentando fallback con requests...")
 		
-		logging.info("Login exitoso, verificando disponibilidad de citas...")
-		if booking_available(session, booking_url):
-			message = f"✅ CITA DISPONIBLE\n\nHay cita disponible para {SERVICE_NAME} en Prenot@mi.\nRevisa inmediatamente: {booking_url}"
-			send_telegram_message(message)
-			logging.warning("⚠️ NOTIFICACIÓN DE CITA ENVIADA POR TELEGRAM")
-			return True
-		else:
-			logging.info("✅ Verificación completada: No hay citas disponibles en este momento")
-	return False
+		# Si falla Selenium, intenta con requests (fallback)
+		try:
+			with requests.Session() as session:
+				session.headers.update(HEADERS)
+				logging.info(f"Iniciando sesión con email: {email}")
+				response = session.post(
+					"https://prenotami.esteri.it/Home/Login",
+					data={"Email": email, "Password": password},
+					timeout=30,
+				)
+				response.raise_for_status()
+				
+				logging.info("Login exitoso, verificando disponibilidad de citas...")
+				if "Radware" in response.text or "captcha" in response.text.lower():
+					logging.warning("⚠️ CAPTCHA detectado - No se puede procesar con requests")
+					return False
+				
+				response = session.get(booking_url, timeout=30)
+				page_text = response.text.lower()
+				no_appointment_found = NO_APPOINTMENT_TEXT.lower() in page_text
+				available = not no_appointment_found
+				
+				logging.info(f"¿Citas disponibles?: {available}")
+				return available
+				
+		except Exception as e2:
+			logging.error(f"Error con requests fallback: {e2}")
+			return False
 
 
 def main(run_once=False):
