@@ -4,8 +4,8 @@ WORKDIR /app
 
 # Instalar Chrome y dependencias
 RUN apt-get update && apt-get install -y \
-    chromium-browser \
     chromium \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar e instalar dependencias
