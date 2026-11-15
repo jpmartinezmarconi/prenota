@@ -88,6 +88,12 @@ def check_booking():
 		chrome_options.add_argument("--headless")
 		chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 		
+		# Intenta usar Chrome de Render si está disponible
+		if os.path.exists("/usr/bin/chromium-browser"):
+			chrome_options.binary_location = "/usr/bin/chromium-browser"
+		elif os.path.exists("/usr/bin/chromium"):
+			chrome_options.binary_location = "/usr/bin/chromium"
+		
 		driver = webdriver.Chrome(
 			service=Service(ChromeDriverManager().install()),
 			options=chrome_options
